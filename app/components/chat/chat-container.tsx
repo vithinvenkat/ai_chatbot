@@ -68,8 +68,8 @@ export function ChatContainer() {
         ))}
         {isLoading && (
           <div className="py-6 bg-secondary/50">
-            <div className="flex gap-4 mx-auto max-w-2xl sm:px-6 md:px-8">
-              <div className="flex-shrink-0">
+            <div className="flex mx-auto max-w-2xl sm:px-6 md:px-8">
+              <div className="flex-shrink-0 mr-4">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-800">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"

@@ -21,13 +21,12 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
   return (
     <div className={cn("py-6", isUser ? "bg-background" : "bg-secondary/50")}>
-      <div className="flex gap-4 mx-auto max-w-2xl sm:px-6 md:px-8">
-        <div className="flex-shrink-0">
-          {isUser ? (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <UserIcon className="h-5 w-5" />
-            </div>
-          ) : (
+      <div className={cn(
+        "mx-auto max-w-2xl sm:px-6 md:px-8",
+        isUser ? "flex justify-end" : "flex"
+      )}>
+        {!isUser && (
+          <div className="flex-shrink-0 mr-4">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-800">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -44,15 +43,35 @@ export function ChatMessage({ message }: ChatMessageProps) {
                 <line x1="12" y1="22" x2="12" y2="12" />
               </svg>
             </div>
-          )}
-        </div>
-        <div className="flex-1 gap-2">
-          <div className="font-semibold mb-1">
+          </div>
+        )}
+        
+        <div className={cn(
+          "flex flex-col",
+          isUser ? "max-w-[75%] items-end" : "flex-1"
+        )}>
+          <div className={cn(
+            "mb-1 font-semibold",
+            isUser ? "text-right" : ""
+          )}>
             {isUser ? "You" : "AI Assistant"}
           </div>
-          <div className="prose prose-sm max-w-none">{message.content}</div>
+          <div className={cn(
+            "prose prose-sm",
+            isUser ? "p-3 bg-primary/10 rounded-lg" : "max-w-none"
+          )}>
+            {message.content}
+          </div>
         </div>
+        
+        {isUser && (
+          <div className="flex-shrink-0 ml-4">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <UserIcon className="h-5 w-5" />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
-} 
+}
