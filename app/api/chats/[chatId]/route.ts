@@ -2,10 +2,11 @@ import { auth } from "@clerk/nextjs/server";
 import { connect } from "../../../../lib/db";
 import Chat from "../../../../lib/modals/Chat";
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 
 // Get a single chat by ID
 export async function GET(
-  req: Request,
+  request: Request,
   context: { params: { chatId: string } }
 ) {
   try {
@@ -14,9 +15,15 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const chatId = context.params.chatId;
+    // Access params through context
+    const { chatId } = context.params;
     if (!chatId) {
       return NextResponse.json({ error: "Chat ID is required" }, { status: 400 });
+    }
+
+    // Validate chatId format
+    if (!mongoose.Types.ObjectId.isValid(chatId)) {
+      return NextResponse.json({ error: "Invalid chat ID format" }, { status: 400 });
     }
 
     await connect();
@@ -30,7 +37,7 @@ export async function GET(
   } catch (error) {
     console.error("Error fetching chat:", error);
     return NextResponse.json(
-      { error: "Failed to fetch chat" },
+      { error: "Failed to fetch chat", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }
@@ -38,7 +45,7 @@ export async function GET(
 
 // Update a chat
 export async function PATCH(
-  req: Request,
+  request: Request,
   context: { params: { chatId: string } }
 ) {
   try {
@@ -47,12 +54,18 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const chatId = context.params.chatId;
+    // Access params through context
+    const { chatId } = context.params;
     if (!chatId) {
       return NextResponse.json({ error: "Chat ID is required" }, { status: 400 });
     }
 
-    const { title } = await req.json();
+    // Validate chatId format
+    if (!mongoose.Types.ObjectId.isValid(chatId)) {
+      return NextResponse.json({ error: "Invalid chat ID format" }, { status: 400 });
+    }
+
+    const { title } = await request.json();
     if (!title) {
       return NextResponse.json(
         { error: "Title is required" },
@@ -75,7 +88,7 @@ export async function PATCH(
   } catch (error) {
     console.error("Error updating chat:", error);
     return NextResponse.json(
-      { error: "Failed to update chat" },
+      { error: "Failed to update chat", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }
@@ -83,7 +96,7 @@ export async function PATCH(
 
 // Delete a chat
 export async function DELETE(
-  req: Request,
+  request: Request,
   context: { params: { chatId: string } }
 ) {
   try {
@@ -92,9 +105,15 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const chatId = context.params.chatId;
+    // Access params through context
+    const { chatId } = context.params;
     if (!chatId) {
       return NextResponse.json({ error: "Chat ID is required" }, { status: 400 });
+    }
+
+    // Validate chatId format
+    if (!mongoose.Types.ObjectId.isValid(chatId)) {
+      return NextResponse.json({ error: "Invalid chat ID format" }, { status: 400 });
     }
 
     await connect();
@@ -111,7 +130,7 @@ export async function DELETE(
   } catch (error) {
     console.error("Error deleting chat:", error);
     return NextResponse.json(
-      { error: "Failed to delete chat" },
+      { error: "Failed to delete chat", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }

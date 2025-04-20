@@ -1,5 +1,5 @@
 import { AuthButton } from './auth-button'
-import { Separator } from '../../../components/ui/separator'
+import { Separator } from '../ui/separator'
 
 export function AuthContainer() {
   return (

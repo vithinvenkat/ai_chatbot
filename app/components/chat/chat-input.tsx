@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { SendIcon } from "lucide-react";
-import { Button } from "../../../components/ui/button";
+import { Button } from "../ui/button";
+import { Textarea } from "../ui/textarea";
 
 interface ChatInputProps {
   onSendMessage: (message: string) => void;
@@ -39,31 +40,31 @@ export function ChatInput({ onSendMessage, isLoading = false }: ChatInputProps) 
   };
 
   return (
-    <div className="border-t bg-background py-4 px-4 sm:px-6 md:px-8">
-      <form onSubmit={handleSubmit} className="relative mx-auto max-w-2xl">
-        <div className="relative rounded-lg border shadow-sm focus-within:ring-1 focus-within:ring-primary">
-          <textarea
-            ref={textareaRef}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Message AI..."
-            className="max-h-[200px] min-h-[48px] w-full resize-none border-0 bg-transparent p-3 pr-12 outline-none focus-visible:ring-0"
-            disabled={isLoading}
-          />
-          <Button
-            type="submit"
-            size="icon"
-            variant="ghost"
-            className={`absolute bottom-1 right-1 ${
-              message.trim() && !isLoading ? "text-primary" : "text-muted-foreground"
-            }`}
-            disabled={!message.trim() || isLoading}
-          >
-            <SendIcon className="h-5 w-5" />
-          </Button>
-        </div>
-      </form>
-    </div>
+    <form onSubmit={handleSubmit} className="relative w-full">
+      <div className="relative flex items-center rounded-lg border border-gray-300 bg-white shadow-sm focus-within:ring-1 focus-within:ring-gray-400 focus-within:border-gray-400">
+        <Textarea
+          ref={textareaRef}
+          value={message}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type a message..."
+          className="resize-none pr-12 border-0 shadow-none focus-visible:ring-0 min-h-[48px] max-h-[200px] md:min-h-[56px]"
+          disabled={isLoading}
+        />
+        <Button
+          type="submit"
+          size="sm"
+          disabled={!message.trim() || isLoading}
+          className="absolute right-2 bg-gray-800 hover:bg-gray-900 text-white rounded-full h-8 w-8 md:h-10 md:w-10 p-0 flex items-center justify-center transition-all"
+          variant="ghost"
+          aria-label="Send message"
+        >
+          <SendIcon className="h-4 w-4 md:h-5 md:w-5" />
+        </Button>
+      </div>
+      <p className="text-xs text-gray-500 mt-2 text-center">
+        Press Enter to send, Shift+Enter for a new line
+      </p>
+    </form>
   );
 } 

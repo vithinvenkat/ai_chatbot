@@ -105,3 +105,64 @@
     color: var(--foreground);
   }
 }
+
+:root {
+  --sidebar: hsl(0 0% 98%);
+  --sidebar-foreground: hsl(240 5.3% 26.1%);
+  --sidebar-primary: hsl(240 5.9% 10%);
+  --sidebar-primary-foreground: hsl(0 0% 98%);
+  --sidebar-accent: hsl(240 4.8% 95.9%);
+  --sidebar-accent-foreground: hsl(240 5.9% 10%);
+  --sidebar-border: hsl(220 13% 91%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --sidebar-width: 16rem;
+  --sidebar-width-icon: 3rem;
+}
+
+.dark {
+  --sidebar: hsl(240 5.9% 10%);
+  --sidebar-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-primary: hsl(224.3 76.3% 48%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(240 3.7% 15.9%);
+  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
+  --sidebar-border: hsl(240 3.7% 15.9%);
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+.bg-sidebar {
+  background-color: #f8f9fa;
+}
+
+.text-sidebar-foreground {
+  color: #333;
+}
+
+.bg-sidebar-accent {
+  background-color: #eaeaea;
+}
+
+.text-sidebar-accent-foreground {
+  color: #111;
+}
+
+.bg-sidebar-border {
+  background-color: #e0e0e0;
+}
+
+.border-sidebar-border {
+  border-color: #e0e0e0;
+}
+
+.ring-sidebar-ring {
+  --tw-ring-color: rgba(0, 0, 0, 0.1);
+}
