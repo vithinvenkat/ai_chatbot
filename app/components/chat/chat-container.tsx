@@ -195,9 +195,12 @@ export function ChatContainer({ chatId }: ChatContainerProps) {
       
       // For real API calls with streaming
       try {
-        // Set up for streaming
+        if (!chatId) {
+          throw new Error("Chat ID is missing. Please select or create a chat.");
+        }
+
         setIsStreaming(true);
-        
+
         // Create an initial empty streaming message
         const aiMessageId = uuidv4();
         const streamingAiMessage: Message = {
@@ -206,101 +209,58 @@ export function ChatContainer({ chatId }: ChatContainerProps) {
           content: "",
           createdAt: new Date(),
         };
-        
+
         setStreamingMessage(streamingAiMessage);
-        
-        // Send the message to the API with streaming response
+
         const response = await fetch(`/api/chats/${chatId}/messages/stream`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            content,
-          }),
+          body: JSON.stringify({ content }),
         });
 
         if (!response.ok) {
-          throw new Error(`Error: ${response.status} ${response.statusText}`);
+          throw new Error(`The assistant encountered a problem: ${response.statusText}`);
         }
-        
-        // Get user message ID from headers if available
-        const userMessageId = response.headers.get('X-User-Message-Id') || uuidv4();
-        
-        // Handle streaming response
+
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
         let responseText = '';
-        
+
         if (!reader) {
-          throw new Error("Response body reader could not be created");
+          throw new Error("Could not read the response stream.");
         }
-        
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          
+
           const chunk = decoder.decode(value, { stream: true });
           responseText += chunk;
-          
-          // Update the streaming message content
+
           setStreamingMessage({
             ...streamingAiMessage,
             content: responseText
           });
         }
-        
-        // Update the user message with real ID
-        setMessages(prev => [
-          ...prev.filter(msg => msg.id !== tempUserMessage.id),
-          {
-            id: userMessageId,
-            role: "user",
-            content: content,
-            createdAt: new Date()
-          },
-          {
-            ...streamingAiMessage,
-            content: responseText
-          }
-        ]);
-      } catch (error) {
-        console.error("Error with streaming:", error);
-        
-        // Fallback to non-streaming API if streaming fails
-        const response = await fetch(`/api/chats/${chatId}/messages`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            content,
-          }),
-        });
 
-        if (!response.ok) {
-          throw new Error(`Error: ${response.status} ${response.statusText}`);
-        }
+        // Finalize message
+        setMessages(prev => [...prev, {
+          ...streamingAiMessage,
+          content: responseText
+        }]);
 
-        const data = await response.json();
-        
-        // Replace the optimistic message with the actual one from the server
-        // and add the AI response
-        setMessages(prev => [
-          ...prev.filter(msg => msg.id !== tempUserMessage.id),
-          {
-            id: data.userMessage._id,
-            role: data.userMessage.role,
-            content: data.userMessage.content,
-            createdAt: new Date(data.userMessage.createdAt)
-          },
-          {
-            id: data.aiMessage._id,
-            role: data.aiMessage.role,
-            content: data.aiMessage.content,
-            createdAt: new Date(data.aiMessage.createdAt)
-          }
-        ]);
+      } catch (error: any) {
+        // Show a friendly error message to the user
+        const errorMessage: Message = {
+          id: uuidv4(),
+          role: "assistant",
+          content: `I'm sorry, but I couldn't process your request due to an issue. Please try again in a moment.`,
+          createdAt: new Date(),
+        };
+
+        setMessages(prev => [...prev, errorMessage]);
       } finally {
         setStreamingMessage(null);
         setIsStreaming(false);
@@ -469,4 +429,4 @@ export function ChatContainer({ chatId }: ChatContainerProps) {
       </div>
     </div>
   );
-} 
+}

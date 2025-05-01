@@ -76,7 +76,8 @@ export async function POST(
   
   try {
     // Access params through context
-    const { chatId } = context.params;
+    const params = await context.params;
+    const { chatId } = params;
     console.log("[API] Chat ID from params:", chatId);
     
     const { userId } = await auth();
@@ -170,4 +171,4 @@ export async function POST(
       { status: 500 }
     );
   }
-} 
+}
