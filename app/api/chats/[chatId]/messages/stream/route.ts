@@ -27,11 +27,17 @@ function createReadableStream(content: string, delay: number = 15) {
   });
 }
 
+// Export the generateStreamResponse function
+export function generateStreamResponse(content: string): ReadableStream {
+  return createReadableStream(content);
+}
+
 export async function POST(
   request: NextRequest,
-  { params }: { params: { chatId: string } }
+  context: { params: { chatId: string } }
 ) {
   try {
+    const { params } = context;
     const { userId } = getAuth(request);
     
     if (!userId) {
@@ -41,7 +47,7 @@ export async function POST(
       );
     }
 
-    const chatId = params.chatId;
+    const { chatId } = await params; // Await params before accessing chatId
     
     // Validate chatId is a valid ObjectId
     if (!mongoose.Types.ObjectId.isValid(chatId)) {
@@ -84,20 +90,15 @@ export async function POST(
       });
       
       // Generate the AI response
-      // In a real app, this would call an AI API with streaming support
-      // For this example, we'll simulate a response
-      const aiResponseContent = `Thank you for your message: "${content}". This is a simulated AI response using server-side streaming. In a production environment, this would be connected to an actual AI service with streaming capabilities.`;
-      
+      const aiResponseStream = await generateStreamResponse(content);
+
       // Create the AI message in the database
       const aiMessage = await Message.create({
         chatId,
         role: "assistant",
-        content: aiResponseContent,
+        content: "", // Content will be streamed
         userId
       });
-      
-      // Create a stream for the AI response
-      const stream = createReadableStream(aiResponseContent);
       
       // Return the streaming response
       const headers = new Headers();
@@ -106,7 +107,7 @@ export async function POST(
       headers.set('X-User-Message-Id', userMessage._id.toString());
       headers.set('X-AI-Message-Id', aiMessage._id.toString());
       
-      return new Response(stream, {
+      return new Response(aiResponseStream, {
         headers,
         status: 200,
       });
@@ -125,4 +126,4 @@ export async function POST(
       { status: 500 }
     );
   }
-} 
+}
