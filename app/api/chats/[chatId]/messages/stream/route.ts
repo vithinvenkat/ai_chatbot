@@ -4,33 +4,12 @@ import { connect } from "../../../../../../lib/db";
 import Chat from "../../../../../../lib/modals/Chat";
 import Message from "../../../../../../lib/modals/Message";
 import mongoose from "mongoose";
+import OpenAI from "openai";
 
-// Helper to create a readable stream from the AI response
-function createReadableStream(content: string, delay: number = 15) {
-  const chunks = content.split('');
-  let index = 0;
-  
-  return new ReadableStream({
-    start(controller) {
-      function push() {
-        if (index < chunks.length) {
-          controller.enqueue(new TextEncoder().encode(chunks[index]));
-          index++;
-          setTimeout(push, delay);
-        } else {
-          controller.close();
-        }
-      }
-      
-      push();
-    }
-  });
-}
-
-// Export the generateStreamResponse function
-export function generateStreamResponse(content: string): ReadableStream {
-  return createReadableStream(content);
-}
+const openai = new OpenAI({
+  apiKey: "not-needed",
+  baseURL: "http://localhost:8000/v1", // vLLM server URL
+});
 
 export async function POST(
   request: NextRequest,
@@ -39,91 +18,81 @@ export async function POST(
   try {
     const { params } = context;
     const { userId } = getAuth(request);
-    
+
     if (!userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { chatId } = await params; // Await params before accessing chatId
-    
-    // Validate chatId is a valid ObjectId
+    const { chatId } = params;
     if (!mongoose.Types.ObjectId.isValid(chatId)) {
-      return NextResponse.json(
-        { error: "Invalid chat ID" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid chat ID" }, { status: 400 });
     }
-    
-    // Connect to MongoDB
-    await connect();
-    
-    // Verify the chat belongs to the user
-    const chat = await Chat.findOne({ _id: chatId, userId });
-    
-    if (!chat) {
-      return NextResponse.json(
-        { error: "Chat not found" },
-        { status: 404 }
-      );
-    }
-    
-    try {
-      // Parse the request to get the message content
-      const { content } = await request.json();
-      
-      if (!content || typeof content !== 'string' || content.trim().length === 0) {
-        return NextResponse.json(
-          { error: "Message content is required" },
-          { status: 400 }
-        );
-      }
-      
-      // Save the user message
-      const userMessage = await Message.create({
-        chatId,
-        role: "user",
-        content,
-        userId
-      });
-      
-      // Generate the AI response
-      const aiResponseStream = await generateStreamResponse(content);
 
-      // Create the AI message in the database
-      const aiMessage = await Message.create({
-        chatId,
-        role: "assistant",
-        content: "", // Content will be streamed
-        userId
-      });
-      
-      // Return the streaming response
-      const headers = new Headers();
-      headers.set('Content-Type', 'text/plain; charset=utf-8');
-      headers.set('Transfer-Encoding', 'chunked');
-      headers.set('X-User-Message-Id', userMessage._id.toString());
-      headers.set('X-AI-Message-Id', aiMessage._id.toString());
-      
-      return new Response(aiResponseStream, {
-        headers,
-        status: 200,
-      });
-      
-    } catch (error) {
-      console.error("Error processing message:", error);
-      return NextResponse.json(
-        { error: "Error processing message" },
-        { status: 500 }
-      );
+    await connect();
+
+    const chat = await Chat.findOne({ _id: chatId, userId });
+    if (!chat) {
+      return NextResponse.json({ error: "Chat not found" }, { status: 404 });
     }
+
+    const body = await request.json();
+    const content = body.content;
+
+    console.log("[REQUEST BODY]", body);
+
+    if (!content || typeof content !== "string" || content.trim().length === 0) {
+      return NextResponse.json({ error: "Message content is required" }, { status: 400 });
+    }
+
+    const userMessage = await Message.create({
+      chatId,
+      role: "user",
+      content,
+      userId,
+    });
+
+    const stream = await openai.chat.completions.create({
+      model: "Qwen/Qwen2-0.5B-Instruct",
+      messages: [{ role: "user", content }],
+      stream: true,
+    });
+
+    const encoder = new TextEncoder();
+    let fullResponse = "";
+
+    const readable = new ReadableStream({
+      async start(controller) {
+        for await (const chunk of stream) {
+          const token = chunk.choices?.[0]?.delta?.content || "";
+          console.log("[STREAM TOKEN]", token);
+          fullResponse += token;
+          controller.enqueue(encoder.encode(token));
+        }
+
+        controller.close();
+
+        // Save the AI response to DB
+        await Message.create({
+          chatId,
+          role: "assistant",
+          content: fullResponse,
+          userId,
+        });
+        console.log("[AI MESSAGE SAVED]");
+      },
+    });
+
+    const headers = new Headers();
+    headers.set("Content-Type", "text/plain; charset=utf-8");
+    headers.set("Transfer-Encoding", "chunked");
+
+    return new Response(readable, {
+      headers,
+      status: 200,
+    });
+
   } catch (error) {
-    console.error("Server error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+    console.error("Error in /stream:", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

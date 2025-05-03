@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { MoreVertical, Trash, Archive, RefreshCw } from "lucide-react";
 import { ChatInput } from "./chat-input";
-import { ChatMessage, Message, MessageRole } from "./chat-message";
+import { ChatMessage, Message } from "./chat-message";
 import { ScrollArea } from "../ui/scroll-area";
 import { Skeleton } from "../ui/skeleton";
 import { useSidebar, SidebarTrigger } from "../ui/sidebar";
@@ -35,7 +35,6 @@ interface Chat {
   createdAt: string;
 }
 
-// Default welcome message for new chats
 const welcomeMessage: Message = {
   id: "welcome",
   role: "assistant",
@@ -51,12 +50,8 @@ export function ChatContainer({ chatId }: ChatContainerProps) {
   const [streamingMessage, setStreamingMessage] = useState<Message | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const { state, isMobile } = useSidebar();
-  
-  // Heights for positioning calculations
-  const inputHeight = 80; // Approximate height of input area in pixels
+  const { isMobile } = useSidebar();
 
-  // Fetch chat details if chatId is provided
   useEffect(() => {
     if (!chatId) {
       setChat(null);
@@ -68,13 +63,10 @@ export function ChatContainer({ chatId }: ChatContainerProps) {
     async function fetchChatDetails() {
       try {
         const response = await fetch(`/api/chats/${chatId}`);
-        if (!response.ok) {
-          console.error("Error fetching chat details:", response.statusText);
-          return null;
-        }
+        if (!response.ok) throw new Error(response.statusText);
         return await response.json();
       } catch (error) {
-        console.error("Error fetching chat details:", error);
+        console.error("Error fetching chat:", error);
         return null;
       }
     }
@@ -82,22 +74,15 @@ export function ChatContainer({ chatId }: ChatContainerProps) {
     async function fetchMessages() {
       try {
         const response = await fetch(`/api/chats/${chatId}/messages`);
-        if (!response.ok) {
-          console.error("Error fetching messages:", response.statusText);
-          return [welcomeMessage];
-        }
-        
+        if (!response.ok) throw new Error(response.statusText);
         const apiMessages: ApiMessage[] = await response.json();
-        
-        // Convert API messages to local format
-        const formattedMessages: Message[] = apiMessages.map(msg => ({
+        const formatted: Message[] = apiMessages.map(msg => ({
           id: msg._id,
           role: msg.role,
           content: msg.content,
-          createdAt: new Date(msg.createdAt)
+          createdAt: new Date(msg.createdAt),
         }));
-        
-        return formattedMessages.length > 0 ? formattedMessages : [welcomeMessage];
+        return formatted.length > 0 ? formatted : [welcomeMessage];
       } catch (error) {
         console.error("Error fetching messages:", error);
         return [welcomeMessage];
@@ -107,200 +92,117 @@ export function ChatContainer({ chatId }: ChatContainerProps) {
     async function loadData() {
       setIsInitialLoad(true);
       setIsLoading(true);
-
       const [chatData, messagesData] = await Promise.all([
         fetchChatDetails(),
-        fetchMessages()
+        fetchMessages(),
       ]);
-
       setChat(chatData);
       setMessages(messagesData);
-      
       setIsInitialLoad(false);
       setIsLoading(false);
     }
-    
+
     loadData();
   }, [chatId]);
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     if (bottomRef.current && !isInitialLoad) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isInitialLoad]);
 
-  // Keep scrolling to bottom during streaming
   useEffect(() => {
     if (bottomRef.current && (isStreaming || !isInitialLoad)) {
       bottomRef.current.scrollIntoView({ behavior: isStreaming ? "auto" : "smooth" });
     }
-  }, [messages, isInitialLoad, streamingMessage, isStreaming]);
+  }, [messages, streamingMessage, isStreaming]);
 
   const handleSendMessage = async (content: string) => {
     if (!content.trim()) return;
-    
-    // Optimistically add user message to UI
+
     const tempUserMessage: Message = {
       id: uuidv4(),
       role: "user",
       content,
       createdAt: new Date(),
     };
-    
+
     setMessages(prev => [...prev, tempUserMessage]);
     setIsLoading(true);
-    
+
     try {
-      if (!chatId) {
-        // Handle the case where we're in the general chat page
-        // Simulate a streaming response
-        setIsStreaming(true);
-        
-        // Create an initial empty streaming message
-        const aiMessageId = uuidv4();
-        const aiMessage: Message = {
-          id: aiMessageId,
-          role: "assistant",
-          content: "",
-          createdAt: new Date(),
-        };
-        
-        setStreamingMessage(aiMessage);
-        
-        // Simulate streaming by adding characters gradually
-        const fullResponse = `I received your message: "${content}". This is a simulated streaming response. In a real app, this would be connected to an actual AI streaming API.`;
-        let currentContent = "";
-        
-        for (let i = 0; i < fullResponse.length; i++) {
-          await new Promise(resolve => setTimeout(resolve, 15)); // Adjust speed as needed
-          currentContent += fullResponse[i];
-          setStreamingMessage({
-            ...aiMessage,
-            content: currentContent
-          });
-        }
-        
-        // Add the complete message to the messages array
-        setMessages(prev => [...prev, {
-          ...aiMessage,
-          content: fullResponse
-        }]);
-        
-        // Reset streaming state
-        setStreamingMessage(null);
-        setIsStreaming(false);
-        return;
+      if (!chatId) throw new Error("Chat ID is missing.");
+
+      setIsStreaming(true);
+
+      const aiMessageId = uuidv4();
+      const streamingAiMessage: Message = {
+        id: aiMessageId,
+        role: "assistant",
+        content: "",
+        createdAt: new Date(),
+      };
+      setStreamingMessage(streamingAiMessage);
+
+      const response = await fetch(`/api/chats/${chatId}/messages/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Streaming error: ${response.statusText}`);
       }
-      
-      // For real API calls with streaming
-      try {
-        if (!chatId) {
-          throw new Error("Chat ID is missing. Please select or create a chat.");
-        }
 
-        setIsStreaming(true);
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let responseText = "";
 
-        // Create an initial empty streaming message
-        const aiMessageId = uuidv4();
-        const streamingAiMessage: Message = {
-          id: aiMessageId,
-          role: "assistant",
-          content: "",
-          createdAt: new Date(),
-        };
+      if (!reader) throw new Error("Missing reader");
 
-        setStreamingMessage(streamingAiMessage);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        responseText += chunk;
+        setStreamingMessage({ ...streamingAiMessage, content: responseText });
+      }
 
-        const response = await fetch(`/api/chats/${chatId}/messages/stream`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ content }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`The assistant encountered a problem: ${response.statusText}`);
-        }
-
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        let responseText = '';
-
-        if (!reader) {
-          throw new Error("Could not read the response stream.");
-        }
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          responseText += chunk;
-
-          setStreamingMessage({
-            ...streamingAiMessage,
-            content: responseText
-          });
-        }
-
-        // Finalize message
-        setMessages(prev => [...prev, {
-          ...streamingAiMessage,
-          content: responseText
-        }]);
-
-      } catch (error: any) {
-        // Show a friendly error message to the user
-        const errorMessage: Message = {
+      setMessages(prev => [...prev, { ...streamingAiMessage, content: responseText }]);
+    } catch (error) {
+      console.error("Stream error:", error);
+      setMessages(prev => [
+        ...prev,
+        {
           id: uuidv4(),
           role: "assistant",
-          content: `I'm sorry, but I couldn't process your request due to an issue. Please try again in a moment.`,
+          content: "Sorry, something went wrong. Please try again.",
           createdAt: new Date(),
-        };
-
-        setMessages(prev => [...prev, errorMessage]);
-      } finally {
-        setStreamingMessage(null);
-        setIsStreaming(false);
-      }
-    } catch (error) {
-      console.error("Error sending message:", error);
-      // Remove the optimistic message if the request failed
-      setMessages(prev => prev.filter(msg => msg.id !== tempUserMessage.id));
+        },
+      ]);
     } finally {
+      setStreamingMessage(null);
+      setIsStreaming(false);
       setIsLoading(false);
     }
   };
 
-  // Handle chat actions
   const handleDeleteChat = async () => {
     if (!chatId) return;
-    
     if (confirm("Are you sure you want to delete this chat?")) {
       try {
-        const response = await fetch(`/api/chats/${chatId}`, {
-          method: "DELETE",
-        });
-        
-        if (response.ok) {
-          // Redirect to main chat page after deletion
-          window.location.href = "/chat";
-        } else {
-          console.error("Failed to delete chat");
-        }
+        const res = await fetch(`/api/chats/${chatId}`, { method: "DELETE" });
+        if (res.ok) window.location.href = "/chat";
+        else throw new Error("Failed to delete chat");
       } catch (error) {
-        console.error("Error deleting chat:", error);
+        console.error("Delete error:", error);
       }
     }
   };
-  
+
   const handleArchiveChat = async () => {
     if (!chatId) return;
-    
-    alert("Archive functionality will be implemented soon");
-    // Implementation would be similar to delete but with a different API endpoint
+    alert("Archive functionality will be implemented soon.");
   };
 
   if (isInitialLoad) {
@@ -315,94 +217,43 @@ export function ChatContainer({ chatId }: ChatContainerProps) {
 
   return (
     <div className="flex flex-col h-full w-full relative">
-      {/* Sidebar trigger at top left */}
       <div className="absolute top-4 left-4 z-20">
-        <SidebarTrigger 
-          className="h-10 w-10 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md flex items-center justify-center shadow-sm" 
-        />
+        <SidebarTrigger className="h-10 w-10 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md flex items-center justify-center shadow-sm" />
       </div>
-      
-      {/* Action buttons at top right */}
+
       <div className="absolute top-4 right-4 z-20 flex items-center space-x-2">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="h-10 px-4 bg-white shadow-sm border-gray-200"
-          onClick={() => window.location.reload()}
-        >
+        <Button variant="outline" size="sm" className="h-10 px-4 bg-white shadow-sm border-gray-200" onClick={() => window.location.reload()}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
-        
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button 
-              variant="outline" 
-              size="icon" 
-              className="h-10 w-10 bg-white shadow-sm border-gray-200"
-            >
+            <Button variant="outline" size="icon" className="h-10 w-10 bg-white shadow-sm border-gray-200">
               <MoreVertical className="h-5 w-5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem 
-              className="text-red-600 cursor-pointer flex items-center"
-              onClick={handleDeleteChat}
-            >
-              <Trash className="mr-2 h-4 w-4" />
-              Delete
+            <DropdownMenuItem className="text-red-600" onClick={handleDeleteChat}>
+              <Trash className="mr-2 h-4 w-4" /> Delete
             </DropdownMenuItem>
-            <DropdownMenuItem 
-              className="cursor-pointer flex items-center"
-              onClick={handleArchiveChat}
-            >
-              <Archive className="mr-2 h-4 w-4" />
-              Archive
+            <DropdownMenuItem onClick={handleArchiveChat}>
+              <Archive className="mr-2 h-4 w-4" /> Archive
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      
-      {/* Chat messages area - now taking full viewport height minus input area */}
+
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-[calc(100vh-80px)]">
           <div className="w-full max-w-screen-md mx-auto space-y-4 p-4 md:p-6 pt-16">
-            {messages.map((message) => (
-              <ChatMessage key={message.id} message={message} />
+            {messages.map((msg) => (
+              <ChatMessage key={msg.id} message={msg} />
             ))}
-            
-            {/* Render streaming message */}
-            {streamingMessage && (
-              <ChatMessage key={streamingMessage.id} message={streamingMessage} />
-            )}
-            
-            {/* Loading indicator */}
+            {streamingMessage && <ChatMessage key={streamingMessage.id} message={streamingMessage} />}
             {isLoading && !isStreaming && (
-              <div className="py-4 w-full">
-                <div className="flex">
-                  <div className="flex-shrink-0 mr-4">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-800">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="h-5 w-5 animate-pulse"
-                      >
-                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                        <polyline points="3.29 7 12 12 20.71 7" />
-                        <line x1="12" y1="22" x2="12" y2="12" />
-                      </svg>
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-semibold mb-1">AI Assistant</div>
-                    <Skeleton className="h-4 w-24" />
-                  </div>
-                </div>
+              <div className="py-4 w-full flex items-center space-x-4">
+                <Skeleton className="h-4 w-24" />
               </div>
             )}
             <div ref={bottomRef} className="h-10" />
@@ -410,22 +261,8 @@ export function ChatContainer({ chatId }: ChatContainerProps) {
         </ScrollArea>
       </div>
 
-      {/* Input area - simplified without title and sidebar trigger */}
-      <div 
-        className="fixed bottom-0 border-t border-gray-200 bg-gray-50 shadow-lg z-20 transition-all duration-300 ease-in-out py-3 px-4"
-        style={{
-          left: isMobile 
-            ? 0 
-            : state === "expanded" 
-              ? "16rem" // Width of expanded sidebar
-              : "3rem",  // Width of collapsed sidebar
-          right: 0,
-          height: `${inputHeight}px`,
-        }}
-      >
-        <div className="w-full max-w-screen-md mx-auto">
-          <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading || isStreaming} />
-        </div>
+      <div className="border-t border-gray-200 p-4">
+        <ChatInput isLoading={isLoading || isStreaming} onSendMessage={handleSendMessage} />
       </div>
     </div>
   );
